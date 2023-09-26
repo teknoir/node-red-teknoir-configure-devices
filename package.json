@@ -1,0 +1,38 @@
+{
+  "name": "node-red-teknoir-configure-devices",
+  "version": "0.0.1",
+  "description": "A set of nodes to configure IoT devices on the Teknoir Platform",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/teknoir/node-red-teknoir-configure-devices.git"
+  },
+  "keywords": [
+    "node-red",
+    "teknoir",
+    "nodered",
+    "k8s",
+    "kubernetes"
+  ],
+  "node-red": {
+    "nodes": {
+      "teknoir-add-app": "src/add-app.js",
+      "teknoir-configure-device": "src/configure-device.js",
+      "teknoir-device-command": "src/device-command.js"
+    }
+  },
+  "author": "Anders Åslund <anders.aslund@teknoir.ai>",
+  "bugs": {
+    "url": "https://teknoir.ai"
+  },
+  "homepage": "https://teknoir.ai",
+  "dependencies": {
+    "js-yaml": "3.14.0",
+    "kubernetes-client": "9.0.0",
+    "depd": "2.0.0",
+    "merge-deep": "3.0.2",
+    "@google-cloud/iot": "3.2.1"
+  }
+}

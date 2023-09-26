@@ -1,0 +1,165 @@
+<script type="text/javascript">
+    RED.nodes.registerType('configure-device',{
+        category: 'devices',
+        color: '#a6bbcf',
+        defaults: {
+            name: {value:""},
+            mode: {value:"select"},
+            devices: {value:[]},
+            metadatalabels: {value:[{"key":"","value":""}]} // "labels" is used by node-red internally
+        },
+        inputs:1,
+        outputs:0,
+        icon: "tn_dark.svg",
+        label: function() {
+            return this.name||"configure-device";
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function () {
+            var node = this;
+
+            function resizeLabels(label) {
+                var newWidth = label.width();
+                label.find('.red-ui-typedInput')
+                    .typedInput("width",newWidth-15);
+            }
+
+            $("#node-input-labels-container")
+                .css('min-height','200px').css('min-width','430px')
+                .editableList({
+                    addItem: function(container, i, opt) {
+                        if (!opt.hasOwnProperty('key')) {
+                            opt.key = "";
+                        }
+                        if (!opt.hasOwnProperty('value')) {
+                            opt.value = "";
+                        }
+                        var row = $('<div/>').appendTo(container);
+                        var keyField = $('<input/>',{
+                            class:"node-input-label-key",
+                            type:"text",
+                            style:"margin-left: 5px;"
+                        }).appendTo(row)
+                            .typedInput({default:'str', types:['str']});
+                        keyField.typedInput('value', opt.key);
+                        keyField.typedInput('type', 'str');
+                        keyField.attr('placeholder', 'key');
+                        var valueField = $('<input/>',{
+                            class:"node-input-label-value",
+                            type:"text",
+                            style:"margin-left: 5px;"
+                        }).appendTo(row)
+                            .typedInput({default:'str', types:['str']});
+                        valueField.typedInput('value', opt.value);
+                        valueField.typedInput('type', 'str');
+                        valueField.attr('placeholder', 'value');
+                        resizeLabels(container);
+                    },
+                    resizeItem: resizeLabels,
+                    sortable: true,
+                    removable: true
+                });
+
+            $("#node-input-mode").on("change", function(e) {
+                var val = $(this).val();
+                $(".node-row-msg-select").toggle(val==="select");
+                $(".node-row-msg-labels").toggle(val==="labels");
+                if (val==="select") {
+                    let selected_devices = node.devices.map(device => JSON.parse(device).name);
+                    const devices_select = document.getElementById('node-input-devices');
+                    devices_select.innerHTML = '';
+                    $.getJSON('node-red-teknoir-configure-devices', function(devices) {
+                        devices.forEach(device => {
+                            const option = document.createElement('option');
+                            option.value = JSON.stringify(device);
+                            option.selected = selected_devices.includes(device.name);
+                            const textNode = document.createTextNode(device.name);
+                            option.appendChild(textNode);
+                            devices_select.appendChild(option);
+                        });
+                    });
+                }
+                if (val==="labels") {
+                    var labels = node.metadatalabels;
+                    var container = $("#node-input-labels-container");
+                    container.editableList('empty');
+                    for (var i = 0; i < labels.length; i++) {
+                        var label = labels[i];
+                        container.editableList('addItem', label);
+                    }
+                }
+            });
+        },
+        oneditsave: function() {
+            var labels = $("#node-input-labels-container").editableList('items');
+            var node = this;
+            node.metadatalabels = [];
+            labels.each(function(i) {
+                var labelData = $(this).data('data');
+                var label = $(this);
+                var kf = label.find(".node-input-label-key");
+                var vf = label.find(".node-input-label-value");
+                var key = kf.typedInput('value');
+                var kt = kf.typedInput('type');
+                var value = vf.typedInput('value');
+                var vt = vf.typedInput('type');
+                var r = {"key":key, "value":value};
+                node.metadatalabels.push(r);
+            });
+        },
+        oneditresize: function(size) {
+            var rows = $("#dialog-form>div:not(.node-input-labels-container-row)");
+            var height = size.height;
+            for (var i = 0; i < rows.length; i++) {
+                height -= $(rows[i]).outerHeight(true);
+            }
+            var editorRow = $("#dialog-form>div.node-input-labels-container-row");
+            height -= (parseInt(editorRow.css("marginTop"))+parseInt(editorRow.css("marginBottom")));
+            $("#node-input-labels-container").editableList('height',height);
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="configure-device">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-mode"> Mode</label>
+        <select type="text" id="node-input-mode" style="width: 300px;">
+            <option value="select">Select Devices by Name</option>
+            <option value="labels">Select Devices by Labels</option>
+        </select>
+    </div>
+
+    <div class="node-row-msg-select">
+        <div class="form-row">
+            <label for="node-input-devices" style="width: 300px;"><i class="fa fa-cogs"></i> Select Devices by Name</label>
+            <select id="node-input-devices" multiple="multiple" style="width:100%; height:200px; margin-right:5px; margin-bottom:5px;">
+                <option placeholder=""></option>
+            </select>
+        </div>
+    </div>
+
+    <div class="node-row-msg-labels">
+        <div class="form-row">
+            <label for="node-input-labels" style="width: 300px;"><i class="fa fa-cogs"></i> Select Devices by Labels</label>
+            <div id="node-input-labels" class="form-row node-input-topics-container-row">
+                <ol id="node-input-labels-container"></ol>
+            </div>
+        </div>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="configure-device">
+    <p>Please be aware that the platform is in aplha state and is undergoing development.
+        Things will change over time and features will be added as we go.</p>
+    <p>A node that takes input from device configuration nodes and updates one or more devices when deployed.</p>
+    <p>Multiple nodes can be connected to one <code>configure-device</code> node to set up a micro service
+        architecture on the device. See the example, called <code>teknoir-device-configuration-example</code>,
+        that can be imported from the menu.</p>
+</script>
