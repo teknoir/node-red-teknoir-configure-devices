@@ -1,0 +1,115 @@
+<script type="text/javascript">
+    RED.nodes.registerType('add-app',{
+        category: 'devices',
+        color: '#a6bbcf',
+        defaults: {
+            name: {value:"add myapp"},
+            template: {value:`---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+        - name: myapp
+          image: gcr.io/teknoir/myapp:latest
+          imagePullPolicy: Always
+          env:
+            - name: MQTT_IN_0
+              value: "myapp/in"
+            - name: MQTT_OUT_0
+              value: "myapp/out"
+`},
+        },
+        inputs:0,
+        outputs:1,
+        icon: "tn_dark.svg",
+        label: function() {
+            return this.name||"add-app";
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function() {
+            var that = this;
+            this.editor = RED.editor.createEditor({
+                id: 'node-input-template-editor',
+                mode: 'ace/mode/yaml',
+                value: $("#node-input-template").val()
+            });
+            RED.popover.tooltip($("#node-template-expand-editor"), RED._("node-red:common.label.expand"));
+            $("#node-template-expand-editor").on("click", function(e) {
+                e.preventDefault();
+                var value = that.editor.getValue();
+                RED.editor.editText({
+                    mode: 'ace/mode/yaml',
+                    value: value,
+                    width: "Infinity",
+                    cursor: that.editor.getCursorPosition(),
+                    complete: function(v,cursor) {
+                        that.editor.setValue(v, -1);
+                        that.editor.gotoLine(cursor.row+1,cursor.column,false);
+                        setTimeout(function() {
+                            that.editor.focus();
+                        },300);
+                    }
+                })
+            })
+        },
+        oneditsave: function() {
+            $("#node-input-template").val(this.editor.getValue());
+            this.editor.destroy();
+            delete this.editor;
+        },
+        oneditcancel: function() {
+            this.editor.destroy();
+            delete this.editor;
+        },
+        oneditresize: function(size) {
+            var rows = $("#dialog-form>div:not(.node-text-editor-row)");
+            var height = $("#dialog-form").height();
+            for (var i=0; i<rows.length; i++) {
+                height -= $(rows[i]).outerHeight(true);
+            }
+            var editorRow = $("#dialog-form>div.node-text-editor-row");
+            height -= (parseInt(editorRow.css("marginTop"))+parseInt(editorRow.css("marginBottom")));
+            $(".node-text-editor").css("height",height+"px");
+            this.editor.resize();
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="add-app">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row" style="position: relative; margin-bottom: 0px;">
+        <label for="node-input-template"><i class="fa fa-file-code-o"></i> <span data-i18n="template.label.template"></span></label>
+        <input type="hidden" id="node-input-template" autofocus="autofocus">
+    </div>
+    <div class="form-row node-text-editor-row">
+        <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-template-editor" ></div>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="add-app">
+    <p>Please be aware that the platform is in aplha state and is undergoing development.
+        Things will change over time and features will be added as we go.</p>
+    <p>A node that when connected to a device node, configures the workload, an app, on the device.</p>
+    <p>The manifest for the workload only supports one kubernetes deployment per node. See official kubernetes
+        <a target="_blank" href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/">
+            deployment documentation</a>.</p>
+    <p>Multiple nodes can be connected to one <code>configure-device</code> node to set up a micro service
+        architecture on the device. See the example, called <code>teknoir-device-configuration-example</code>,
+        that can be imported from the menu.</p>
+</script>
