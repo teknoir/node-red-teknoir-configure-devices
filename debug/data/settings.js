@@ -312,7 +312,7 @@ module.exports = {
       redirect: "http://teknoir.info/devstudio/",
     },
     palette: {
-      editable: false, // Enable/disable the Palette Manager
+      allowInstall: false, // Enable/disable the Palette Manager
 //      catalogues: [   // Alternative palette manager catalogues
 //        'https://catalogue.nodered.org/catalogue.json'
       theme: [

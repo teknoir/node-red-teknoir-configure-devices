@@ -146,6 +146,7 @@ module.exports = function (RED) {
                                     text: "No configuration nodes wired up"
                                 });
                             } else {
+                                // sendDebug(node, yaml.safeDump(config), debuglength);
                                 if (mode === "select") {
                                     node.status({
                                         fill: "green",

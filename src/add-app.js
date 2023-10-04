@@ -14,7 +14,7 @@ module.exports = function (RED) {
         }, this.onceDelay);
 
         function output(msg, value) {
-            value = yaml.load(value);
+            value = yaml.safeLoadAll(value);
             RED.util.setMessageProperty(msg, "add_resource", true);
             RED.util.setMessageProperty(msg, "payload", value);
             node.send(msg);
