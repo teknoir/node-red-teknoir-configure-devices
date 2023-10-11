@@ -86,10 +86,13 @@ module.exports = function (RED) {
         const mode = config.mode || "select";
         this.onceDelay = 0.25 * 1000;
         this.namespace = namespace;
-        this.client = new Client({version: '1.13'});
-        let data = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
-        let crd = yaml.load(data)
-        this.client.addCustomResourceDefinition(crd);
+        let client = new Client({version: '1.13'});
+        let crd = yaml.safeLoad(fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), {
+            encoding: 'utf8',
+            flag: 'r'
+        }));
+        client.addCustomResourceDefinition(crd);
+        this.client = client;
         const node = this;
         var debuglength = RED.settings.debugMaxLength || 1000;
 
@@ -255,7 +258,7 @@ module.exports = function (RED) {
 
     RED.httpAdmin.get('/node-red-teknoir-configure-devices', function (req, res) {
         let client = new Client({version: '1.13'});
-        let data = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
+        let data = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), {encoding: 'utf8', flag: 'r'});
         let crd = yaml.load(data)
         client.addCustomResourceDefinition(crd);
         client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get()
