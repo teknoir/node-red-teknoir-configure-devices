@@ -13,10 +13,8 @@ module.exports = function (RED) {
 
     function configureDevice(node, device, namespace, config) {
         const newItems = JSON.parse(JSON.stringify(config));
-        console.log('newItems', newItems)
 
         newItems.map(manifest => {
-            console.log('manifest', manifest)
             // Add annotations to manifest
             if (!manifest.metadata.hasOwnProperty('annotations')) {
                 manifest.metadata['annotations'] = {};
