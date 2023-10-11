@@ -1,19 +1,11 @@
 const {Client} = require("kubernetes-client");
+const yaml = require("js-yaml");
+const fs = require("fs");
 module.exports = function (RED) {
     const fs = require('fs');
     const yaml = require("js-yaml");
     const Client = require('kubernetes-client').Client;
     const namespace = process.env.NAMESPACE || "default";
-
-    let readYaml = (path, cb) => {
-        fs.readFile(require.resolve(path), 'utf8', (err, data) => {
-            if (err) {
-                cb(err);
-            } else {
-                cb(null, yaml.load(data));
-            }
-        })
-    }
 
     function sleep(time) {
         return new Promise((resolve) => setTimeout(resolve, time));
@@ -21,8 +13,10 @@ module.exports = function (RED) {
 
     function configureDevice(node, device, namespace, config) {
         const newItems = JSON.parse(JSON.stringify(config));
+        console.log('newItems', newItems)
 
         newItems.map(manifest => {
+            console.log('manifest', manifest)
             // Add annotations to manifest
             if (!manifest.metadata.hasOwnProperty('annotations')) {
                 manifest.metadata['annotations'] = {};
@@ -95,13 +89,9 @@ module.exports = function (RED) {
         this.onceDelay = 0.25 * 1000;
         this.namespace = namespace;
         this.client = new Client({version: '1.13'});
-        readYaml('./kubeflow.org_devices.yaml', (err, crd) => {
-            if (err) {
-                console.log(err);
-            } else {
-                this.client.addCustomResourceDefinition(crd);
-            }
-        });
+        let data = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
+        let crd = yaml.load(data)
+        this.client.addCustomResourceDefinition(crd);
         const node = this;
         var debuglength = RED.settings.debugMaxLength || 1000;
 
@@ -123,7 +113,11 @@ module.exports = function (RED) {
                             if (!current) {
                                 current = [];
                             }
-                            current.push(msg.payload);
+                            if (Array.isArray(msg.payload)) {
+                                current = current.concat(msg.payload);
+                            } else {
+                                current.push(msg.payload);
+                            }
                             target.set(context.key, current, context.store, function (err) {
                                 if (err) {
                                     node.error(err, msg);
@@ -196,41 +190,39 @@ module.exports = function (RED) {
                                     const labelSelector = node.metadatalabels.map(label => {
                                         return Object.keys(label).map(key => key + "=" + label[key]);
                                     }).join(",");
-                                    client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get({
+                                    node.client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get({
                                         qs: {
                                             labelSelector: labelSelector ? labelSelector : ''
                                         }
-                                    })
-                                        .then(devices => {
-                                            node.status({
-                                                fill: "green",
-                                                shape: "dot",
-                                                text: "Successfully updated devices.",
-                                            });
-                                            devices.body.items.forEach((device, idx) => {
-                                                // Global API rate limit 3000 requests per min (50/sec)
-                                                // Here we do 1 requests per device, so we can configure 50 devices per second
-                                                // I think this is single threaded, so we can just add a delay here... times 2 as this is not the only client
-                                                sleep((idx * 2 * 1000) / 50).then(() => {
-                                                    configureDevice(node, device, node.namespace, config)
-                                                        .then(() => {
-                                                            sendDebug(node, device.metadata.name + ": successfully updated", debuglength);
-                                                        })
-                                                        .catch(err => {
-                                                            sendDebug(node, device.metadata.name + ": failed to update (" + err.message + ")", debuglength);
-                                                            node.status({
-                                                                fill: "yellow",
-                                                                shape: "dot",
-                                                                text: "Warning! One or more devices failed to update. See debug log for details.",
-                                                            });
+                                    }).then(devices => {
+                                        node.status({
+                                            fill: "green",
+                                            shape: "dot",
+                                            text: "Successfully updated devices.",
+                                        });
+                                        devices.body.items.forEach((device, idx) => {
+                                            // Global API rate limit 3000 requests per min (50/sec)
+                                            // Here we do 1 requests per device, so we can configure 50 devices per second
+                                            // I think this is single threaded, so we can just add a delay here... times 2 as this is not the only client
+                                            sleep((idx * 2 * 1000) / 50).then(() => {
+                                                configureDevice(node, device, node.namespace, config)
+                                                    .then(() => {
+                                                        sendDebug(node, device.metadata.name + ": successfully updated", debuglength);
+                                                    })
+                                                    .catch(err => {
+                                                        sendDebug(node, device.metadata.name + ": failed to update (" + err.message + ")", debuglength);
+                                                        node.status({
+                                                            fill: "yellow",
+                                                            shape: "dot",
+                                                            text: "Warning! One or more devices failed to update. See debug log for details.",
                                                         });
-                                                });
+                                                    });
                                             });
-                                        })
-                                        .catch(err => {
-                                            node.error(err.message, msg);
-                                            node.status({fill: "red", shape: "dot", text: err.message});
-                                        })
+                                        });
+                                    }).catch(err => {
+                                        node.error(err.message, msg);
+                                        node.status({fill: "red", shape: "dot", text: err.message});
+                                    })
                                 }
                             }
                         }
@@ -265,27 +257,22 @@ module.exports = function (RED) {
 
     RED.httpAdmin.get('/node-red-teknoir-configure-devices', function (req, res) {
         let client = new Client({version: '1.13'});
-        readYaml('./kubeflow.org_devices.yaml', (err, crd) => {
-            if (err) {
-                console.log(err);
-            } else {
-                client.addCustomResourceDefinition(crd);
-                client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get()
-                    .catch(error => res.status(500).send(error))
-                    .then(devices => {
-                        deviceList = [];
-                        devices.body.items.forEach((device) => {
-                            deviceList.push({
-                                name: device.metadata.name,
-                                namespace: device.metadata.namespace,
-                                labels: device.metadata.labels
-                            });
-                        })
-                        res.status(200).json(deviceList);
+        let data = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
+        let crd = yaml.load(data)
+        client.addCustomResourceDefinition(crd);
+        client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get()
+            .catch(error => res.status(500).send(error))
+            .then(devices => {
+                deviceList = [];
+                devices.body.items.forEach((device) => {
+                    deviceList.push({
+                        name: device.metadata.name,
+                        namespace: device.metadata.namespace,
+                        labels: device.metadata.labels
                     });
-            }
-        });
-
+                })
+                res.status(200).json(deviceList);
+            });
     });
 
 }
