@@ -1,8 +1,8 @@
+const {Client} = require("kubernetes-client");
 module.exports = function (RED) {
     const fs = require('fs');
     const yaml = require("js-yaml");
     const Client = require('kubernetes-client').Client;
-    const client = new Client({version: '1.13'});
     const namespace = process.env.NAMESPACE || "default";
 
     let readYaml = (path, cb) => {
@@ -14,13 +14,6 @@ module.exports = function (RED) {
             }
         })
     }
-    readYaml('./kubeflow.org_devices.yaml', (err, crd) => {
-        if (err) {
-            console.log(err);
-        } else {
-            client.addCustomResourceDefinition(crd);
-        }
-    });
 
     function sleep(time) {
         return new Promise((resolve) => setTimeout(resolve, time));
@@ -101,7 +94,14 @@ module.exports = function (RED) {
         const mode = config.mode || "select";
         this.onceDelay = 0.25 * 1000;
         this.namespace = namespace;
-        this.client = client;
+        this.client = new Client({version: '1.13'});
+        readYaml('./kubeflow.org_devices.yaml', (err, crd) => {
+            if (err) {
+                console.log(err);
+            } else {
+                this.client.addCustomResourceDefinition(crd);
+            }
+        });
         const node = this;
         var debuglength = RED.settings.debugMaxLength || 1000;
 
@@ -264,24 +264,28 @@ module.exports = function (RED) {
     };
 
     RED.httpAdmin.get('/node-red-teknoir-configure-devices', function (req, res) {
-        client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get()
-            .catch(error => res.status(500).send(error))
-            .then(devices => {
-                deviceList = [];
-                devices.body.items.forEach((device) => {
-                    deviceList.push({
-                        name: device.metadata.name,
-                        namespace: device.metadata.namespace,
-                        labels: device.metadata.labels
+        let client = new Client({version: '1.13'});
+        readYaml('./kubeflow.org_devices.yaml', (err, crd) => {
+            if (err) {
+                console.log(err);
+            } else {
+                client.addCustomResourceDefinition(crd);
+                client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get()
+                    .catch(error => res.status(500).send(error))
+                    .then(devices => {
+                        deviceList = [];
+                        devices.body.items.forEach((device) => {
+                            deviceList.push({
+                                name: device.metadata.name,
+                                namespace: device.metadata.namespace,
+                                labels: device.metadata.labels
+                            });
+                        })
+                        res.status(200).json(deviceList);
                     });
-                })
-                res.status(200).json(deviceList);
-                // names = [];
-                // devices.body.items.forEach((device) => {
-                //     names.push(device.metadata.name);
-                // })
-                // res.status(200).json(names);
-            })
+            }
+        });
+
     });
 
 }
