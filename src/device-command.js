@@ -1,10 +1,10 @@
+const {Client} = require("kubernetes-client");
 module.exports = async function (RED) {
     const fs = require('fs')
     const yaml = require("js-yaml");
     const Client = require('kubernetes-client').Client;
-    const k8sClient = new Client({version: '1.13'});
-    const DeviceManagerClient = require('@google-cloud/iot').v1.DeviceManagerClient;
-    const iotClient = new DeviceManagerClient();
+    // const DeviceManagerClient = require('@google-cloud/iot').v1.DeviceManagerClient;
+    // const iotClient = new DeviceManagerClient();
     const namespace = process.env.NAMESPACE || "default";
     const project_id = process.env.PROJECT_ID || "default";
 
@@ -16,13 +16,6 @@ module.exports = async function (RED) {
                 cb(null, yaml.load(data));
         })
     }
-    readYaml('./kubeflow.org_devices.yaml', (err, crd) => {
-        if (err) {
-            console.log(err);
-        } else {
-            k8sClient.addCustomResourceDefinition(crd);
-        }
-    });
 
     function DeviceCommand(config) {
         RED.nodes.createNode(this, config);
@@ -33,6 +26,14 @@ module.exports = async function (RED) {
         const mode = config.mode || "select";
         const app = config.app;
         const node = this;
+        this.client = new Client({version: '1.13'});
+        readYaml('./kubeflow.org_devices.yaml', (err, crd) => {
+            if (err) {
+                console.log(err);
+            } else {
+                this.client.addCustomResourceDefinition(crd);
+            }
+        });
 
         const sendCommand = function sendCommandFunc(deviceName, payload) {
             const name = `projects/${project_id}/locations/us-central1/registries/${namespace}/devices/${deviceName}`;
@@ -45,9 +46,9 @@ module.exports = async function (RED) {
             };
 
             // Run request
-            iotClient.sendCommandToDevice(request).catch(err => {
-                node.error(err.message, err.details);
-            });
+            // iotClient.sendCommandToDevice(request).catch(err => {
+            //     node.error(err.message, err.details);
+            // });
         };
 
         node.on('input', function (msg) {
@@ -62,7 +63,7 @@ module.exports = async function (RED) {
                                 text: "Command sent to " + app + " on: \n" + node.devices.map(deviceName => deviceName + " \n")
                             });
                         } else if (mode === "labels") {
-                            k8sClient.apis['kubeflow.org'].v1.namespaces(namespace).devices().get().then(devices => {
+                            this.client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get().then(devices => {
                                 var filtered = devices.body.items.filter(device => {
                                     return node.metadatalabels.reduce((matchingAllLabels, label1) => {
                                         return matchingAllLabels && Object.keys(label1).reduce((matchingAll, key1) => {
