@@ -84,7 +84,7 @@ module.exports = function (RED) {
             return {[label.key]: label.value};
         });
         const mode = config.mode || "select";
-        this.onceDelay = 0.25 * 1000;
+        this.onceDelay = 1.50 * 1000;
         this.namespace = namespace;
         let client = new Client({version: '1.13'});
         let crd = yaml.safeLoad(fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), {
@@ -143,11 +143,20 @@ module.exports = function (RED) {
                             } else {
                                 // sendDebug(node, yaml.safeDump(config), debuglength);
                                 if (mode === "select") {
-                                    node.status({
-                                        fill: "green",
-                                        shape: "dot",
-                                        text: "Successfully updated devices.",
-                                    });
+                                    if (!node.devices || node.devices.length < 1) {
+                                        node.error("No devices selected");
+                                        node.status({
+                                            fill: "red",
+                                            shape: "dot",
+                                            text: "No devices selected",
+                                        });
+                                    } else {
+                                        node.status({
+                                            fill: "green",
+                                            shape: "dot",
+                                            text: "Successfully updated devices.",
+                                        });
+                                    }
                                     node.devices.forEach((deviceName, idx) => {
                                         // Global API rate limit 3000 requests per min (50/sec)
                                         // Here we do 2 requests per device, so we can configure 25 devices per second
@@ -196,11 +205,20 @@ module.exports = function (RED) {
                                             labelSelector: labelSelector ? labelSelector : ''
                                         }
                                     }).then(devices => {
-                                        node.status({
-                                            fill: "green",
-                                            shape: "dot",
-                                            text: "Successfully updated devices.",
-                                        });
+                                        if (!devices.body.items || devices.body.items.length < 1) {
+                                            node.error("No devices found for label selector: " + labelSelector);
+                                            node.status({
+                                                fill: "red",
+                                                shape: "dot",
+                                                text: "No devices found for label selector: " + labelSelector,
+                                            });
+                                        } else {
+                                            node.status({
+                                                fill: "green",
+                                                shape: "dot",
+                                                text: "Successfully updated devices.",
+                                            });
+                                        }
                                         devices.body.items.forEach((device, idx) => {
                                             // Global API rate limit 3000 requests per min (50/sec)
                                             // Here we do 1 requests per device, so we can configure 50 devices per second

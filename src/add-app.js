@@ -5,7 +5,7 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, config);
         var node = this;
         this.template = config.template;
-        this.onceDelay = 0.1 * 1000;
+        this.onceDelay = 0.01 * 1000;
 
         node.status({});
 
