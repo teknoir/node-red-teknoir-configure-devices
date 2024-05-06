@@ -9,7 +9,7 @@
   },
   "main": "node_modules/node-red/red/red.js",
   "scripts": {
-    "start": "node_modules/.bin/nodemon --watch '../' $NODE_OPTIONS node_modules/node-red/red.js --userDir ./data",
+    "start": "node_modules/node-red-teknoir-configure-devices/node_modules/.bin/nodemon --watch '../' $NODE_OPTIONS node_modules/node-red-teknoir-configure-devices/node_modules/node-red/red.js --userDir ./data",
     "start_": "node $NODE_OPTIONS node_modules/node-red/red.js --userDir ./data"
   },
   "dependencies": {

@@ -4,7 +4,7 @@
   "description": "A set of nodes to configure IoT devices on the Teknoir Platform",
   "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "start": "yarn workspace debug start"
   },
   "workspaces": [
@@ -33,9 +33,14 @@
   },
   "homepage": "https://teknoir.ai",
   "dependencies": {
+    "depd": "2.0.0",
     "js-yaml": "3.14.0",
     "kubernetes-client": "9.0.0",
-    "depd": "2.0.0",
-    "merge-deep": "3.0.3"
+    "merge-deep": "3.0.3",
+    "node-red-teknoir-configure-devices": "github:teknoir/node-red-teknoir-configure-devices#main"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "sinon": "^17.0.1"
   }
 }

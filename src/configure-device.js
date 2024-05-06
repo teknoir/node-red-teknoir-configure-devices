@@ -294,4 +294,5 @@ module.exports = function (RED) {
             });
     });
 
+    return configureDevice;
 }
