@@ -1,14 +1,13 @@
-const sinon = require('sinon');
 const { Client } = require('kubernetes-client');
 const yaml = require('js-yaml');
 const fs = require('fs');
 
 const RED = {
   nodes: {
-    registerType: sinon.stub(),
+    registerType: jest.fn(),
   },
   httpAdmin: {
-    get: sinon.stub(),
+    get: jest.fn(),
   },
 };
 
@@ -16,7 +15,7 @@ const REDModule = require('../src/configure-device')(RED);
 let sandbox;
 
 describe('configureDevice', () => {
-  let node, device, namespace, config, clientStub;
+  let node, device, namespace, config= [], putMock;
 
   function configureDeviceWrapper(node, device, namespace, config) {
     // Call the configureDevice function from the RED module
@@ -24,8 +23,7 @@ describe('configureDevice', () => {
   }
 
   beforeEach(async () => {
-    sandbox = sinon.createSandbox();
-    node = { client: new Client({ version: '1.13' }) };
+    node = { client: new Client({ version: '1.13' }), error: jest.fn(), status: jest.fn() };
     let crd = yaml.safeLoad(fs.readFileSync(require.resolve('../src/kubeflow.org_devices.yaml'), {
       encoding: 'utf8',
       flag: 'r'
@@ -51,42 +49,44 @@ describe('configureDevice', () => {
       }
     };
     namespace = 'default';
-    config = [{ metadata: { annotations: {} }, spec: { template: { spec: { containers: [{}] } } } }];
+    config = [{ kind: "Deployment", metadata: { name: "record-measurements" }, spec: { template: { spec: { containers: [{}] } } } }];
+    putMock = jest.fn().mockResolvedValue({ body: { status: 'Success' } });
 
-    // Use sandbox to create stubs
-    sandbox.stub(node.client.apis['kubeflow.org'].v1.namespaces(namespace).devices, 'post');
-  });
-
-  afterEach(() => {
-    sandbox.restore();
+    node.client.apis['kubeflow.org'].v1.namespaces = jest.fn().mockReturnValue({
+      devices: jest.fn().mockReturnValue({
+        post: jest.fn(),
+        put: putMock
+      })
+    });
   });
 
   it('should successfully configure device', async () => {
-    const putStub = sandbox.stub(node.client.apis['kubeflow.org'].v1.namespaces(namespace).devices(device.metadata.name), 'put');
-    putStub.resolves({ body: { status: 'Success' } });
+    configureDeviceWrapper(node, device, namespace, config);
 
-    await configureDeviceWrapper(node, device, namespace, config);
-    sinon.assert.calledOnce(putStub);
+    // Check that the mock was called once
+    expect(putMock).toHaveBeenCalledTimes(1);
   });
 
-  // it('should handle error when configuring device', async () => {
-  //   clientStub.rejects(new Error('Failed to configure device'));
-  //
-  //   try {
-  //     await configureDeviceWrapper(node, device, namespace, config);
-  //   } catch (error) {
-  //     expect(error.message).toBe('Failed to configure device');
-  //   }
-  //
-  //   expect(clientStub.calledOnce).toBe(true);
-  // });
-  //
-  // it('should handle undefined containers', async () => {
-  //   config[0].spec.template.spec.containers = undefined;
-  //   clientStub.resolves({ status: 'Success' });
-  //
-  //   await configureDeviceWrapper(node, device, namespace, config);
-  //
-  //   expect(clientStub.calledOnce).toBe(true);
-  // });
+  it('should handle additional manifest with ConfigMap', async () => {
+    config.push({ kind: "ConfigMap", metadata: { name: "sensors-config" }})
+
+    configureDeviceWrapper(node, device, namespace, config);
+
+    // error/status should not have been called
+    expect(node.error).toHaveBeenCalledTimes(0);
+    expect(node.status).toHaveBeenCalledTimes(0);
+    expect(putMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('should handle error when configuring device due to incorrect manifest', async () => {
+    config.push({ kind: "ConfigMap", metadata: { name: "sensors-config" }})
+    config.push({ kind: "Deployment", metadata: { name: "record-video" }})
+
+    configureDeviceWrapper(node, device, namespace, config);
+
+    // error/status should have been called
+    expect(node.error).toHaveBeenCalledTimes(1);
+    expect(node.status).toHaveBeenCalledTimes(1);
+    expect(putMock).toHaveBeenCalledTimes(1);
+  });
 });
