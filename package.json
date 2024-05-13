@@ -1,6 +1,6 @@
 {
   "name": "node-red-teknoir-configure-devices",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A set of nodes to configure IoT devices on the Teknoir Platform",
   "private": true,
   "scripts": {
