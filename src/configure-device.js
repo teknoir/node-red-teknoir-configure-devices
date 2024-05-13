@@ -14,33 +14,43 @@ module.exports = function (RED) {
     function configureDevice(node, device, namespace, config) {
         const newItems = JSON.parse(JSON.stringify(config));
 
-        newItems.map(manifest => {
-            // Add annotations to manifest
-            if (!manifest.metadata.hasOwnProperty('annotations')) {
-                manifest.metadata['annotations'] = {};
-            }
-            // Add teknoir.org/managed-by annotation
-            manifest.metadata.annotations['teknoir.org/managed-by'] = 'devstudio';
-            // Add environment variables to containers
-            manifest.spec.template.spec.containers.forEach(container => {
-                if (!container.hasOwnProperty('env')) {
-                    container['env'] = [];
+        // prevent handling manifests that are not describing deployments (e.g. ConfigMap)
+        newItems.filter(manifest => manifest.hasOwnProperty('kind') && manifest.kind === 'Deployment').map(manifest => {
+            try {
+                // Add annotations to manifest
+                if (!manifest.metadata.hasOwnProperty('annotations')) {
+                    manifest.metadata['annotations'] = {};
                 }
-                container.env.push({
-                    name: 'LABEL_DEVICE_ID',
-                    value: device.metadata.name
-                });
-                container.env.push({
-                    name: 'LABEL_NAMESPACE',
-                    value: namespace
-                });
-                Object.keys(device.metadata.labels).forEach(key => {
+                // Add teknoir.org/managed-by annotation
+                manifest.metadata.annotations['teknoir.org/managed-by'] = 'devstudio';
+                // Add environment variables to containers
+                manifest.spec.template.spec.containers.forEach(container => {
+                    if (!container.hasOwnProperty('env')) {
+                        container['env'] = [];
+                    }
                     container.env.push({
-                        name: 'LABEL_' + key.toLocaleUpperCase(),
-                        value: device.metadata.labels[key]
+                        name: 'LABEL_DEVICE_ID',
+                        value: device.metadata.name
                     });
+                    container.env.push({
+                        name: 'LABEL_NAMESPACE',
+                        value: namespace
+                    });
+                    Object.keys(device.metadata.labels).forEach(key => {
+                        container.env.push({
+                            name: 'LABEL_' + key.toLocaleUpperCase(),
+                            value: device.metadata.labels[key]
+                        });
+                    })
                 })
-            })
+            } catch (err) {
+                node.error("Malformed configuration: " + err.message);
+                node.status({
+                    fill: "red",
+                    shape: "dot",
+                    text: "Malformed configuration"
+                });
+            }
         })
 
         // Add apps to manifest
@@ -294,4 +304,5 @@ module.exports = function (RED) {
             });
     });
 
+    return configureDevice;
 }
