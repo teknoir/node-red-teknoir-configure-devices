@@ -50,10 +50,11 @@ module.exports = function (RED) {
                     shape: "dot",
                     text: "Malformed configuration"
                 });
+                return null;
             }
 
             return manifest;
-        });
+        }).filter(manifest => manifest !== null);
 
         // Add apps to manifest
         if (!device.spec.manifest.hasOwnProperty('apps')) {
