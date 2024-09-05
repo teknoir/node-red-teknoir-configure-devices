@@ -12,10 +12,10 @@ module.exports = function (RED) {
     }
 
     function configureDevice(node, device, namespace, config) {
-        const newItems = JSON.parse(JSON.stringify(config));
+        let newItems = JSON.parse(JSON.stringify(config));
 
         // prevent handling manifests that are not describing deployments (e.g. ConfigMap)
-        newItems.filter(manifest => manifest.hasOwnProperty('kind') && manifest.kind === 'Deployment').map(manifest => {
+        newItems = newItems.filter(manifest => manifest && manifest.hasOwnProperty('kind') && manifest.kind === 'Deployment').map(manifest => {
             try {
                 // Add annotations to manifest
                 if (!manifest.metadata.hasOwnProperty('annotations')) {
@@ -42,7 +42,7 @@ module.exports = function (RED) {
                             value: device.metadata.labels[key]
                         });
                     })
-                })
+                });
             } catch (err) {
                 node.error("Malformed configuration: " + err.message);
                 node.status({
@@ -50,16 +50,23 @@ module.exports = function (RED) {
                     shape: "dot",
                     text: "Malformed configuration"
                 });
+                return null;
             }
-        })
+
+            return manifest;
+        }).filter(manifest => manifest !== null);
 
         // Add apps to manifest
         if (!device.spec.manifest.hasOwnProperty('apps')) {
             device.spec.manifest['apps'] = {items: []};
         }
+        if (!device.spec.manifest.apps.hasOwnProperty('items')) {
+            device.spec.manifest.apps.items = [];
+        }
+
         // Remove manifest items missing teknoir.org/managed-by annotation and items managed by devstudio
         device.spec.manifest.apps.items = device.spec.manifest.apps.items.filter(item => {
-            return item.metadata.annotations && (
+            return item.metadata && item.metadata.annotations && (
                 !item.metadata.annotations.hasOwnProperty('teknoir.org/managed-by') ||
                 item.metadata.annotations['teknoir.org/managed-by'] !== 'devstudio');
         });
