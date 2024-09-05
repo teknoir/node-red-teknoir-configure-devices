@@ -12,18 +12,80 @@ module.exports = function (RED) {
     }
 
     function configureDevice(node, device, namespace, config) {
-        let newItems = JSON.parse(JSON.stringify(config));
+        const newItems = JSON.parse(JSON.stringify(config));
+    
+        // Determine the API version of the device
+        const apiVersion = device.apiVersion.split('/')[0];
+    
+        // Process the configuration based on the API version
+        if (apiVersion === 'teknoir.org') {
+            // Handle teknoir.org devices
+            processTeknoirDevice(node, device, namespace, newItems);
+        } else if (apiVersion === 'kubeflow.org') {
+            // Handle kubeflow.org devices
+            processKubeflowDevice(node, device, namespace, newItems);
+        } else {
+            node.error("Unsupported API version: " + apiVersion);
+            node.status({
+                fill: "red",
+                shape: "dot",
+                text: "Unsupported API version"
+            });
+            return;
+        }
+    
+        // Update the device in Kubernetes
+        return node.client.apis[apiVersion].v1.namespaces(namespace).devices(device.metadata.name).put({body: device});
+    }
 
-        // prevent handling manifests that are not describing deployments (e.g. ConfigMap)
-        newItems = newItems.filter(manifest => manifest && manifest.hasOwnProperty('kind') && manifest.kind === 'Deployment').map(manifest => {
+    function processTeknoirDevice(node, device, namespace, newItems) {
+
+        if (!device.spec.manifest.hasOwnProperty('apps')) {
+            device.spec.manifest['apps'] = {};
+        }
+
+        device.spec.manifest.apps = Object.keys(device.spec.manifest.apps)
+        .filter(appName => {
+            const app = device.spec.manifest.apps[appName];
+            return app.metadata && app.metadata.annotations && (
+                !app.metadata.annotations.hasOwnProperty('teknoir.org/managed-by') ||
+                app.metadata.annotations['teknoir.org/managed-by'] !== 'devstudio'
+            );
+        })
+        .reduce((result, appName) => {
+            result[appName] = device.spec.manifest.apps[appName];
+            return result;
+        }, {});
+    
+        newItems.forEach(newItem => {
+            let appName = newItem.metadata.name;
+            
+            if (!newItem.metadata.hasOwnProperty('annotations')) {
+                newItem.metadata['annotations'] = {};
+            }
+            
+            newItem.metadata.annotations['teknoir.org/managed-by'] = 'devstudio';
+            if (device.spec.manifest.apps.hasOwnProperty(appName)) {
+                node.error(`Duplicate app name detected: ${appName}`);
+                return;
+            }
+
+            device.spec.manifest.apps[appName] = newItem;
+        });
+
+    }
+    
+    function processKubeflowDevice(node, device, namespace, newItems) {
+   
+        newItems.filter(manifest => manifest.hasOwnProperty('kind') && manifest.kind === 'Deployment').map(manifest => {
             try {
-                // Add annotations to manifest
+               
                 if (!manifest.metadata.hasOwnProperty('annotations')) {
                     manifest.metadata['annotations'] = {};
                 }
-                // Add teknoir.org/managed-by annotation
+
                 manifest.metadata.annotations['teknoir.org/managed-by'] = 'devstudio';
-                // Add environment variables to containers
+
                 manifest.spec.template.spec.containers.forEach(container => {
                     if (!container.hasOwnProperty('env')) {
                         container['env'] = [];
@@ -41,7 +103,7 @@ module.exports = function (RED) {
                             name: 'LABEL_' + key.toLocaleUpperCase(),
                             value: device.metadata.labels[key]
                         });
-                    })
+                    });
                 });
             } catch (err) {
                 node.error("Malformed configuration: " + err.message);
@@ -50,34 +112,25 @@ module.exports = function (RED) {
                     shape: "dot",
                     text: "Malformed configuration"
                 });
-                return null;
             }
+        });
+    
 
-            return manifest;
-        }).filter(manifest => manifest !== null);
-
-        // Add apps to manifest
         if (!device.spec.manifest.hasOwnProperty('apps')) {
             device.spec.manifest['apps'] = {items: []};
         }
-        if (!device.spec.manifest.apps.hasOwnProperty('items')) {
-            device.spec.manifest.apps.items = [];
-        }
 
-        // Remove manifest items missing teknoir.org/managed-by annotation and items managed by devstudio
         device.spec.manifest.apps.items = device.spec.manifest.apps.items.filter(item => {
-            return item.metadata && item.metadata.annotations && (
+            return item.metadata.annotations && (
                 !item.metadata.annotations.hasOwnProperty('teknoir.org/managed-by') ||
                 item.metadata.annotations['teknoir.org/managed-by'] !== 'devstudio');
         });
-        // Remove manifest items with the same name as in new config
+
         device.spec.manifest.apps.items = device.spec.manifest.apps.items.filter(item => {
             return !newItems.some(newItem => newItem.metadata.name === item.metadata.name)
         });
-        // Add new items
-        device.spec.manifest.apps.items.push(...newItems);
 
-        return node.client.apis['kubeflow.org'].v1.namespaces(namespace).devices(device.metadata.name).put({body: device});
+        device.spec.manifest.apps.items.push(...newItems);
     }
 
     function sendDebug(node, msg, debuglength) {
@@ -96,7 +149,7 @@ module.exports = function (RED) {
 
     function ConfigureDevice(config) {
         RED.nodes.createNode(this, config);
-        this.devices = config.devices.map(device => JSON.parse(device).name);
+        this.devices = config.devices.map(device => JSON.parse(device));
         this.metadatalabels = config.metadatalabels.map(label => {
             return {[label.key]: label.value};
         });
@@ -104,11 +157,22 @@ module.exports = function (RED) {
         this.onceDelay = 1.50 * 1000;
         this.namespace = namespace;
         let client = new Client({version: '1.13'});
-        let crd = yaml.safeLoad(fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), {
-            encoding: 'utf8',
-            flag: 'r'
-        }));
-        client.addCustomResourceDefinition(crd);
+
+        // List of CRD files to load
+        const crdFiles = [
+            './kubeflow.org_devices.yaml',
+            './teknoir.org_devices.yaml'
+        ];
+
+        // Load and add each CRD to the client
+        crdFiles.forEach(crdFile => {
+            let crd = yaml.safeLoad(fs.readFileSync(require.resolve(crdFile), {
+                encoding: 'utf8',
+                flag: 'r'
+            }));
+            client.addCustomResourceDefinition(crd);
+        });
+
         this.client = client;
         const node = this;
         var debuglength = RED.settings.debugMaxLength || 1000;
@@ -174,12 +238,21 @@ module.exports = function (RED) {
                                             text: "Successfully updated devices.",
                                         });
                                     }
-                                    node.devices.forEach((deviceName, idx) => {
+                                    node.devices.forEach((device, idx) => {
+                                        const deviceName = device.name;
                                         // Global API rate limit 3000 requests per min (50/sec)
                                         // Here we do 2 requests per device, so we can configure 25 devices per second
                                         // I think this is single threaded, so we can just add a delay here... times 2 as this is not the only client
+
+                                        let apiVersion = null;
+                                        if (device.source === 'kubeflow.org') {
+                                            apiVersion = 'kubeflow.org';
+                                        } else if (device.source === 'teknoir.org') {
+                                            apiVersion = 'teknoir.org';
+                                        }
+                        
                                         sleep((idx * 2 * 1000) / 25).then(() => {
-                                            node.client.apis['kubeflow.org'].v1.namespaces(node.namespace).devices(deviceName).get()
+                                            node.client.apis[apiVersion].v1.namespaces(node.namespace).devices(deviceName).get()
                                                 .catch(() => {
                                                     sendDebug(node, deviceName + ": failed to update (could not get device)", debuglength);
                                                     node.status({
@@ -217,7 +290,11 @@ module.exports = function (RED) {
                                     const labelSelector = node.metadatalabels.map(label => {
                                         return Object.keys(label).map(key => key + "=" + label[key]);
                                     }).join(",");
-                                    node.client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get({
+
+                                    const apiVersions = ['kubeflow.org', 'teknoir.org'];
+
+                                    apiVersions.forEach(apiVersion => {
+                                        node.client.apis[apiVersion].v1.namespaces(namespace).devices().get({
                                         qs: {
                                             labelSelector: labelSelector ? labelSelector : ''
                                         }
@@ -258,7 +335,7 @@ module.exports = function (RED) {
                                     }).catch(err => {
                                         node.error(err.message, msg);
                                         node.status({fill: "red", shape: "dot", text: err.message});
-                                    })
+                                    })});
                                 }
                             }
                         }
@@ -291,24 +368,44 @@ module.exports = function (RED) {
         }
     };
 
-    RED.httpAdmin.get('/node-red-teknoir-configure-devices', function (req, res) {
-        let client = new Client({version: '1.13'});
-        let data = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), {encoding: 'utf8', flag: 'r'});
-        let crd = yaml.load(data)
-        client.addCustomResourceDefinition(crd);
-        client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get()
-            .catch(error => res.status(500).send(error))
-            .then(devices => {
-                deviceList = [];
-                devices.body.items.forEach((device) => {
-                    deviceList.push({
-                        name: device.metadata.name,
-                        namespace: device.metadata.namespace,
-                        labels: device.metadata.labels
-                    });
-                })
-                res.status(200).json(deviceList);
-            });
+
+
+    RED.httpAdmin.get('/node-red-teknoir-configure-devices', async function (req, res) {
+        try {
+            let client = new Client({version: '1.13'});
+
+            let kubeflowData = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), {encoding: 'utf8', flag: 'r'});
+            let kubeflowCrd = yaml.load(kubeflowData);
+            client.addCustomResourceDefinition(kubeflowCrd);
+
+            let teknoirData = fs.readFileSync(require.resolve('./teknoir.org_devices.yaml'), {encoding: 'utf8', flag: 'r'});
+            let teknoirCrd = yaml.load(teknoirData);
+            client.addCustomResourceDefinition(teknoirCrd);
+
+            let kubeflowDevices = await client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get();
+            let kubeflowDeviceList = kubeflowDevices.body.items.map(device => ({
+                name: device.metadata.name,
+                namespace: device.metadata.namespace,
+                labels: device.metadata.labels,
+                source: 'kubeflow.org'
+            }));
+
+            let teknoirDevices = await client.apis['teknoir.org'].v1.namespaces(namespace).devices().get();
+            let teknoirDeviceList = teknoirDevices.body.items.map(device => ({
+                name: device.metadata.name,
+                namespace: device.metadata.namespace,
+                labels: device.metadata.labels,
+                source: 'teknoir.org'
+            }));
+
+            // Combine both device lists
+            let combinedDeviceList = [...kubeflowDeviceList, ...teknoirDeviceList];
+
+            // Send the combined list as the response
+            res.status(200).json(combinedDeviceList);
+        } catch (error) {
+            res.status(500).send(error);
+        }
     });
 
     return configureDevice;
