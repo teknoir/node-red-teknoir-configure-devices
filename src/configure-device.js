@@ -1,4 +1,4 @@
-const {Client} = require("kubernetes-client");
+const { Client } = require("kubernetes-client");
 const yaml = require("js-yaml");
 const fs = require("fs");
 module.exports = function (RED) {
@@ -13,10 +13,10 @@ module.exports = function (RED) {
 
     function configureDevice(node, device, namespace, config) {
         const newItems = JSON.parse(JSON.stringify(config));
-    
+
         // Determine the API version of the device
         const apiVersion = device.apiVersion.split('/')[0];
-    
+
         // Process the configuration based on the API version
         if (apiVersion === 'teknoir.org') {
             // Handle teknoir.org devices
@@ -33,9 +33,9 @@ module.exports = function (RED) {
             });
             return;
         }
-    
+
         // Update the device in Kubernetes
-        return node.client.apis[apiVersion].v1.namespaces(namespace).devices(device.metadata.name).put({body: device});
+        return node.client.apis[apiVersion].v1.namespaces(namespace).devices(device.metadata.name).put({ body: device });
     }
 
     function processTeknoirDevice(node, device, namespace, newItems) {
@@ -45,25 +45,25 @@ module.exports = function (RED) {
         }
 
         device.spec.manifest.apps = Object.keys(device.spec.manifest.apps)
-        .filter(appName => {
-            const app = device.spec.manifest.apps[appName];
-            return app.metadata && app.metadata.annotations && (
-                !app.metadata.annotations.hasOwnProperty('teknoir.org/managed-by') ||
-                app.metadata.annotations['teknoir.org/managed-by'] !== 'devstudio'
-            );
-        })
-        .reduce((result, appName) => {
-            result[appName] = device.spec.manifest.apps[appName];
-            return result;
-        }, {});
-    
+            .filter(appName => {
+                const app = device.spec.manifest.apps[appName];
+                return app.metadata && app.metadata.annotations && (
+                    !app.metadata.annotations.hasOwnProperty('teknoir.org/managed-by') ||
+                    app.metadata.annotations['teknoir.org/managed-by'] !== 'devstudio'
+                );
+            })
+            .reduce((result, appName) => {
+                result[appName] = device.spec.manifest.apps[appName];
+                return result;
+            }, {});
+
         newItems.forEach(newItem => {
             let appName = newItem.metadata.name;
-            
+
             if (!newItem.metadata.hasOwnProperty('annotations')) {
                 newItem.metadata['annotations'] = {};
             }
-            
+
             newItem.metadata.annotations['teknoir.org/managed-by'] = 'devstudio';
             if (device.spec.manifest.apps.hasOwnProperty(appName)) {
                 node.error(`Duplicate app name detected: ${appName}`);
@@ -74,12 +74,12 @@ module.exports = function (RED) {
         });
 
     }
-    
+
     function processKubeflowDevice(node, device, namespace, newItems) {
-   
+
         newItems.filter(manifest => manifest.hasOwnProperty('kind') && manifest.kind === 'Deployment').map(manifest => {
             try {
-               
+
                 if (!manifest.metadata.hasOwnProperty('annotations')) {
                     manifest.metadata['annotations'] = {};
                 }
@@ -114,10 +114,10 @@ module.exports = function (RED) {
                 });
             }
         });
-    
+
 
         if (!device.spec.manifest.hasOwnProperty('apps')) {
-            device.spec.manifest['apps'] = {items: []};
+            device.spec.manifest['apps'] = { items: [] };
         }
 
         device.spec.manifest.apps.items = device.spec.manifest.apps.items.filter(item => {
@@ -151,12 +151,12 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, config);
         this.devices = config.devices.map(device => JSON.parse(device));
         this.metadatalabels = config.metadatalabels.map(label => {
-            return {[label.key]: label.value};
+            return { [label.key]: label.value };
         });
         const mode = config.mode || "select";
         this.onceDelay = 1.50 * 1000;
         this.namespace = namespace;
-        let client = new Client({version: '1.13'});
+        let client = new Client({ version: '1.13' });
 
         // List of CRD files to load
         const crdFiles = [
@@ -178,7 +178,7 @@ module.exports = function (RED) {
         var debuglength = RED.settings.debugMaxLength || 1000;
 
         this.onceTimeout = setTimeout(function () {
-            node.emit("input", {deploy_configuration: true});
+            node.emit("input", { deploy_configuration: true });
         }, this.onceDelay);
 
         node.on('input', function (msg) {
@@ -190,7 +190,7 @@ module.exports = function (RED) {
                     target.get(context.key, context.store, (err, current) => {
                         if (err) {
                             node.error(err, msg);
-                            node.status({fill: "red", shape: "dot", text: err});
+                            node.status({ fill: "red", shape: "dot", text: err });
                         } else {
                             if (!current) {
                                 current = [];
@@ -203,7 +203,7 @@ module.exports = function (RED) {
                             target.set(context.key, current, context.store, function (err) {
                                 if (err) {
                                     node.error(err, msg);
-                                    node.status({fill: "red", shape: "dot", text: err});
+                                    node.status({ fill: "red", shape: "dot", text: err });
                                 }
                             });
                         }
@@ -212,7 +212,7 @@ module.exports = function (RED) {
                     target.get(context.key, context.store, (err, config) => {
                         if (err) {
                             node.error(err, msg);
-                            node.status({fill: "red", shape: "dot", text: err});
+                            node.status({ fill: "red", shape: "dot", text: err });
                         } else {
                             if (!config) {
                                 node.error("There is no config to deploy, please connect some configuration nodes");
@@ -250,7 +250,7 @@ module.exports = function (RED) {
                                         } else if (device.source === 'teknoir.org') {
                                             apiVersion = 'teknoir.org';
                                         }
-                        
+
                                         sleep((idx * 2 * 1000) / 25).then(() => {
                                             node.client.apis[apiVersion].v1.namespaces(node.namespace).devices(deviceName).get()
                                                 .catch(() => {
@@ -295,47 +295,48 @@ module.exports = function (RED) {
 
                                     apiVersions.forEach(apiVersion => {
                                         node.client.apis[apiVersion].v1.namespaces(namespace).devices().get({
-                                        qs: {
-                                            labelSelector: labelSelector ? labelSelector : ''
-                                        }
-                                    }).then(devices => {
-                                        if (!devices.body.items || devices.body.items.length < 1) {
-                                            node.error("No devices found for label selector: " + labelSelector);
-                                            node.status({
-                                                fill: "red",
-                                                shape: "dot",
-                                                text: "No devices found for label selector: " + labelSelector,
-                                            });
-                                        } else {
-                                            node.status({
-                                                fill: "green",
-                                                shape: "dot",
-                                                text: "Successfully updated devices.",
-                                            });
-                                        }
-                                        devices.body.items.forEach((device, idx) => {
-                                            // Global API rate limit 3000 requests per min (50/sec)
-                                            // Here we do 1 requests per device, so we can configure 50 devices per second
-                                            // I think this is single threaded, so we can just add a delay here... times 2 as this is not the only client
-                                            sleep((idx * 2 * 1000) / 50).then(() => {
-                                                configureDevice(node, device, node.namespace, config)
-                                                    .then(() => {
-                                                        sendDebug(node, device.metadata.name + ": successfully updated", debuglength);
-                                                    })
-                                                    .catch(err => {
-                                                        sendDebug(node, device.metadata.name + ": failed to update (" + err.message + ")", debuglength);
-                                                        node.status({
-                                                            fill: "yellow",
-                                                            shape: "dot",
-                                                            text: "Warning! One or more devices failed to update. See debug log for details.",
+                                            qs: {
+                                                labelSelector: labelSelector ? labelSelector : ''
+                                            }
+                                        }).then(devices => {
+                                            if (!devices.body.items || devices.body.items.length < 1) {
+                                                node.error("No devices found for label selector: " + labelSelector);
+                                                node.status({
+                                                    fill: "red",
+                                                    shape: "dot",
+                                                    text: "No devices found for label selector: " + labelSelector,
+                                                });
+                                            } else {
+                                                node.status({
+                                                    fill: "green",
+                                                    shape: "dot",
+                                                    text: "Successfully updated devices.",
+                                                });
+                                            }
+                                            devices.body.items.forEach((device, idx) => {
+                                                // Global API rate limit 3000 requests per min (50/sec)
+                                                // Here we do 1 requests per device, so we can configure 50 devices per second
+                                                // I think this is single threaded, so we can just add a delay here... times 2 as this is not the only client
+                                                sleep((idx * 2 * 1000) / 50).then(() => {
+                                                    configureDevice(node, device, node.namespace, config)
+                                                        .then(() => {
+                                                            sendDebug(node, device.metadata.name + ": successfully updated", debuglength);
+                                                        })
+                                                        .catch(err => {
+                                                            sendDebug(node, device.metadata.name + ": failed to update (" + err.message + ")", debuglength);
+                                                            node.status({
+                                                                fill: "yellow",
+                                                                shape: "dot",
+                                                                text: "Warning! One or more devices failed to update. See debug log for details.",
+                                                            });
                                                         });
-                                                    });
+                                                });
                                             });
-                                        });
-                                    }).catch(err => {
-                                        node.error(err.message, msg);
-                                        node.status({fill: "red", shape: "dot", text: err.message});
-                                    })});
+                                        }).catch(err => {
+                                            node.error(err.message, msg);
+                                            node.status({ fill: "red", shape: "dot", text: err.message });
+                                        })
+                                    });
                                 }
                             }
                         }
@@ -343,7 +344,7 @@ module.exports = function (RED) {
                 }
             } catch (err) {
                 node.error(err.message, msg);
-                node.status({fill: "red", shape: "dot", text: err.message});
+                node.status({ fill: "red", shape: "dot", text: err.message });
             }
         });
     }
@@ -372,31 +373,45 @@ module.exports = function (RED) {
 
     RED.httpAdmin.get('/node-red-teknoir-configure-devices', async function (req, res) {
         try {
-            let client = new Client({version: '1.13'});
+            let client = new Client({ version: '1.13' });
 
-            let kubeflowData = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), {encoding: 'utf8', flag: 'r'});
+            let kubeflowDeviceList = [];
+            let teknoirDeviceList = [];
+
+            let kubeflowData = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
             let kubeflowCrd = yaml.load(kubeflowData);
             client.addCustomResourceDefinition(kubeflowCrd);
 
-            let teknoirData = fs.readFileSync(require.resolve('./teknoir.org_devices.yaml'), {encoding: 'utf8', flag: 'r'});
+            let teknoirData = fs.readFileSync(require.resolve('./teknoir.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
             let teknoirCrd = yaml.load(teknoirData);
             client.addCustomResourceDefinition(teknoirCrd);
+            try {
+                let kubeflowDevices = await client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get();
+                kubeflowDeviceList = kubeflowDevices.body.items.map(device => ({
+                    name: device.metadata.name,
+                    namespace: device.metadata.namespace,
+                    labels: device.metadata.labels,
+                    source: 'kubeflow.org'
+                }));
+            } catch (error) {
+                console.error("Failed to load or fetch kubeflow.org devices:", error.message);
+            }
 
-            let kubeflowDevices = await client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get();
-            let kubeflowDeviceList = kubeflowDevices.body.items.map(device => ({
-                name: device.metadata.name,
-                namespace: device.metadata.namespace,
-                labels: device.metadata.labels,
-                source: 'kubeflow.org'
-            }));
+            try {
+                let teknoirData = fs.readFileSync(require.resolve('./teknoir.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
+                let teknoirCrd = yaml.load(teknoirData);
+                client.addCustomResourceDefinition(teknoirCrd);
 
-            let teknoirDevices = await client.apis['teknoir.org'].v1.namespaces(namespace).devices().get();
-            let teknoirDeviceList = teknoirDevices.body.items.map(device => ({
-                name: device.metadata.name,
-                namespace: device.metadata.namespace,
-                labels: device.metadata.labels,
-                source: 'teknoir.org'
-            }));
+                let teknoirDevices = await client.apis['teknoir.org'].v1.namespaces(namespace).devices().get();
+                teknoirDeviceList = teknoirDevices.body.items.map(device => ({
+                    name: device.metadata.name,
+                    namespace: device.metadata.namespace,
+                    labels: device.metadata.labels,
+                    source: 'teknoir.org'
+                }));
+            } catch (error) {
+                console.error("Failed to load or fetch teknoir.org devices:", error.message);
+            }
 
             // Combine both device lists
             let combinedDeviceList = [...kubeflowDeviceList, ...teknoirDeviceList];
