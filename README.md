@@ -16,6 +16,13 @@ npm install
 npm start
 ```
 
+or in the root of the project
+
+```
+yarn install
+yarn run deubg
+```
+
 # TODO:
 - [ ] Add full user documentation in node
 - [ ] Use the catalog to get App deployments

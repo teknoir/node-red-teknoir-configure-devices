@@ -1,5 +1,6 @@
 module.exports = function (RED) {
     var yaml = require("js-yaml");
+    var util = require("util");
 
     function AddApp(config) {
         RED.nodes.createNode(this, config);
@@ -8,6 +9,9 @@ module.exports = function (RED) {
         this.onceDelay = 0.01 * 1000;
 
         node.status({});
+
+        node.log("AddApp node initialized with config: " + util.inspect(config));
+
 
         this.onceTimeout = setTimeout( function() {
             node.emit("input",{});
