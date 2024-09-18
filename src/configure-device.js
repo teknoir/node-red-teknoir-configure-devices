@@ -239,6 +239,7 @@ module.exports = function (RED) {
                                         });
                                     }
                                     node.devices.forEach((device, idx) => {
+                                        
                                         const deviceName = device.name;
                                         // Global API rate limit 3000 requests per min (50/sec)
                                         // Here we do 2 requests per device, so we can configure 25 devices per second
@@ -251,7 +252,13 @@ module.exports = function (RED) {
                                             apiVersion = 'teknoir.org';
                                         }
 
+                                        if (!apiVersion) {
+                                            console.error('Error: apiVersion is null for device:', deviceName);
+                                            return;
+                                        }
+
                                         sleep((idx * 2 * 1000) / 25).then(() => {
+
                                             node.client.apis[apiVersion].v1.namespaces(node.namespace).devices(deviceName).get()
                                                 .catch(() => {
                                                     sendDebug(node, deviceName + ": failed to update (could not get device)", debuglength);
