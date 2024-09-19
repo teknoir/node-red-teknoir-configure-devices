@@ -10,9 +10,6 @@ module.exports = function (RED) {
 
         node.status({});
 
-        node.log("AddApp node initialized with config: " + util.inspect(config));
-
-
         this.onceTimeout = setTimeout( function() {
             node.emit("input",{});
         }, this.onceDelay);
