@@ -58,19 +58,24 @@ module.exports = function (RED) {
             }, {});
 
         newItems.forEach(newItem => {
-            let appName = newItem.metadata.name;
+            if (newItem && newItem.metadata) {
+                let appName = newItem.metadata.name;
 
-            if (!newItem.metadata.hasOwnProperty('annotations')) {
-                newItem.metadata['annotations'] = {};
+                if (!newItem.metadata.hasOwnProperty('annotations')) {
+                    newItem.metadata['annotations'] = {};
+                }
+
+                newItem.metadata.annotations['teknoir.org/managed-by'] = 'devstudio';
+                if (device.spec.manifest.apps.hasOwnProperty(appName)) {
+                    node.error(`Duplicate app name detected: ${appName}`);
+                    return;
+                }
+
+                device.spec.manifest.apps[appName] = newItem;
             }
-
-            newItem.metadata.annotations['teknoir.org/managed-by'] = 'devstudio';
-            if (device.spec.manifest.apps.hasOwnProperty(appName)) {
-                node.error(`Duplicate app name detected: ${appName}`);
-                return;
+            else {
+                console.error('Error: newItem or newItem.metadata is undefined', newItem);
             }
-
-            device.spec.manifest.apps[appName] = newItem;
         });
 
     }
@@ -239,7 +244,7 @@ module.exports = function (RED) {
                                         });
                                     }
                                     node.devices.forEach((device, idx) => {
-                                        
+
                                         const deviceName = device.name;
                                         // Global API rate limit 3000 requests per min (50/sec)
                                         // Here we do 2 requests per device, so we can configure 25 devices per second
