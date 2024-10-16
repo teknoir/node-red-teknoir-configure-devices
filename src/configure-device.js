@@ -6,6 +6,14 @@ module.exports = function (RED) {
     const yaml = require("js-yaml");
     const Client = require('kubernetes-client').Client;
     const namespace = process.env.NAMESPACE || "default";
+    const MAX_K8S_NAME_LENGTH = 253;
+
+    function truncateName(name, maxLength) {
+        if (name.length > maxLength) {
+            return name.substring(0, maxLength);
+        }
+        return name;
+    }
 
     function sleep(time) {
         return new Promise((resolve) => setTimeout(resolve, time));
@@ -59,7 +67,10 @@ module.exports = function (RED) {
 
         newItems.forEach(newItem => {
             if (newItem && newItem.metadata) {
-                let appName = newItem.metadata.name;
+                const namespace = newItem.metadata.namespace || 'default';
+                let appName = `${newItem.metadata.name}-${newItem.kind.toLowerCase()}-${namespace}`;
+                appName = truncateName(appName, MAX_K8S_NAME_LENGTH);
+                node.trace('Processing app: ' + appName);
 
                 if (!newItem.metadata.hasOwnProperty('annotations')) {
                     newItem.metadata['annotations'] = {};
@@ -74,7 +85,7 @@ module.exports = function (RED) {
                 device.spec.manifest.apps[appName] = newItem;
             }
             else {
-                console.error('Error: newItem or newItem.metadata is undefined', newItem);
+                node.error('Error: newItem or newItem.metadata is undefined', newItem);
             }
         });
 
@@ -258,7 +269,7 @@ module.exports = function (RED) {
                                         }
 
                                         if (!apiVersion) {
-                                            console.error('Error: apiVersion is null for device:', deviceName);
+                                            node.error('Error: apiVersion is null for device:', deviceName);
                                             return;
                                         }
 

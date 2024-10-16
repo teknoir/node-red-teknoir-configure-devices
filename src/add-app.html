@@ -4,31 +4,8 @@
         color: '#a6bbcf',
         defaults: {
             name: {value:"add myapp"},
-            template: {value:`---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: myapp
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: myapp
-  template:
-    metadata:
-      labels:
-        app: myapp
-    spec:
-      containers:
-        - name: myapp
-          image: gcr.io/teknoir/myapp:latest
-          imagePullPolicy: Always
-          env:
-            - name: MQTT_IN_0
-              value: "myapp/in"
-            - name: MQTT_OUT_0
-              value: "myapp/out"
-`},
+            resourceType: {value:"deployment"},
+            template: {value:""},
         },
         inputs:0,
         outputs:1,
@@ -46,6 +23,203 @@ spec:
                 mode: 'ace/mode/yaml',
                 value: $("#node-input-template").val()
             });
+
+            function getTemplate(resourceType) {
+                var templates = {
+                    deployment: `---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teknoir-myapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: teknoir-myapp
+  template:
+    metadata:
+      labels:
+        app: teknoir-myapp
+    spec:
+      containers:
+        - name: teknoir-myapp
+          image: gcr.io/myapp:latest
+          imagePullPolicy: Always
+          env:
+            - name: MQTT_IN_0
+              value: "teknoir-myapp/in"
+            - name: MQTT_OUT_0
+              value: "teknoir-myapp/out"`,
+                    configmap: `---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: teknoir-myapp-config
+data:
+  APP_CONFIG: |
+    key1=value1
+    key2=value2`,
+                    service: `---
+apiVersion: v1
+kind: Service
+metadata:
+  name: teknoir-myapp-service
+spec:
+  selector:
+    app: teknoir-myapp
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080`,
+                    secret: `---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: teknoir-myapp-secret
+type: Opaque
+data:
+  username: dXNlcm5hbWU=
+  password: cGFzc3dvcmQ=`,
+                    role: `---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: teknoir-pod-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]`,
+                    rolebinding: `---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: teknoir-read-pods
+  namespace: default
+subjects:
+- kind: User
+  name: jane
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: teknoir-pod-reader
+  apiGroup: rbac.authorization.k8s.io`,
+                    serviceaccount: `---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: teknoir-myapp-service-account
+  namespace: default`,
+                    clusterrole: `---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: teknoir-secret-reader
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "watch", "list"]`,
+                    clusterrolebinding: `---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: teknoir-read-secrets-global
+subjects:
+- kind: Group
+  name: manager
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: teknoir-secret-reader
+  apiGroup: rbac.authorization.k8s.io`
+                };
+                return templates[resourceType] || "";
+            }
+
+            function updateTemplate(resourceType, force = false) {
+                var currentContent = that.editor.getValue().trim();
+                var templateContent = getTemplate(resourceType);
+                
+                // Only update if forced or if the current content is empty
+                if (force || currentContent === "") {
+                    that.editor.setValue(templateContent, -1);
+                    $("#node-input-template").val(templateContent);
+                }
+                
+                $("#node-input-resourceType").val(resourceType);
+            }
+
+            var confirmDialog = $('<div id="resource-type-confirm" title="Confirm Template Change">' +
+                '<p>Changing the resource type will replace the current content. Are you sure you want to proceed?</p>' +
+                '</div>').appendTo('body');
+
+            confirmDialog.dialog({
+                autoOpen: false,
+                modal: true,
+                buttons: {
+                    "Cancel": function() {
+                        $(this).dialog("close");
+                    },
+                    "Proceed": function() {
+                        updateTemplate(confirmDialog.data('newType'), true);
+                        $(this).dialog("close");
+                    }
+                }
+            });
+
+            var resourceTypes = [
+                {value: 'deployment', label: 'Deployment'},
+                {value: 'configmap', label: 'ConfigMap'},
+                {value: 'service', label: 'Service'},
+                {value: 'secret', label: 'Secret'},
+                {value: 'role', label: 'Role'},
+                {value: 'rolebinding', label: 'RoleBinding'},
+                {value: 'serviceaccount', label: 'ServiceAccount'},
+                {value: 'clusterrole', label: 'ClusterRole'},
+                {value: 'clusterrolebinding', label: 'ClusterRoleBinding'}
+            ];
+
+            var select = $('<select>', {
+                id: 'node-input-resource-type-select',
+                style: 'width:70%;padding-left:5px;margin-left:5px;'
+            });
+
+            resourceTypes.forEach(function(type) {
+                $('<option>', {
+                    value: type.value,
+                    text: type.label
+                }).appendTo(select);
+            });
+
+            select.on('change', function() {
+                var newType = this.value;
+                var currentContent = that.editor.getValue().trim();
+                var currentType = $("#node-input-resourceType").val();
+                
+                if (currentContent !== "" && currentContent !== getTemplate(currentType)) {
+                    confirmDialog.data('newType', newType);
+                    confirmDialog.dialog('open');
+                } else {
+                    updateTemplate(newType, true);
+                }
+            });
+
+            // Insert the dropdown into the template row
+            var templateRow = $('.form-row:has(#node-input-template)');
+            templateRow.find('label').text('Template');
+            select.insertAfter(templateRow.find('label'));
+            templateRow.find('#node-input-template').appendTo(templateRow);
+
+            var savedType = $("#node-input-resourceType").val();
+            var savedContent = $("#node-input-template").val();
+            if (savedContent) {
+                that.editor.setValue(savedContent, -1);
+                select.val(savedType);
+            } else {
+                updateTemplate(savedType || "deployment", true);
+                select.val(savedType || "deployment");
+            }
+
             RED.popover.tooltip($("#node-template-expand-editor"), RED._("node-red:common.label.expand"));
             $("#node-template-expand-editor").on("click", function(e) {
                 e.preventDefault();
@@ -67,6 +241,7 @@ spec:
         },
         oneditsave: function() {
             $("#node-input-template").val(this.editor.getValue());
+            $("#node-input-resourceType").val($("#node-input-resource-type-select").val());
             this.editor.destroy();
             delete this.editor;
         },
@@ -90,12 +265,16 @@ spec:
 
 <script type="text/html" data-template-name="add-app">
     <div class="form-row">
-        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <label for="node-input-name"><i class="icon-tag"></i>Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
-    <div class="form-row" style="position: relative; margin-bottom: 0px;">
-        <label for="node-input-template"><i class="fa fa-file-code-o"></i> <span data-i18n="template.label.template"></span></label>
+    <div class="form-row">
+        <label for="node-input-template"><i class="fa fa-file-code-o"></i>Template</label>
+        <input type="hidden" id="node-input-resourceType">
         <input type="hidden" id="node-input-template" autofocus="autofocus">
+    </div>
+    <div class="form-row" style="position: relative; margin-bottom: 0px;"></div>
+        <label for="node-input-template"><i class="fa fa-file-code-o"></i> <span data-i18n="template.label.template"></span></label>
     </div>
     <div class="form-row node-text-editor-row">
         <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-template-editor" ></div>
@@ -103,12 +282,12 @@ spec:
 </script>
 
 <script type="text/html" data-help-name="add-app">
-    <p>Please be aware that the platform is in aplha state and is undergoing development.
+    <p>Please be aware that the platform is in alpha state and is undergoing development.
         Things will change over time and features will be added as we go.</p>
     <p>A node that when connected to a device node, configures the workload, an app, on the device.</p>
-    <p>The manifest for the workload only supports one kubernetes deployment per node. See official kubernetes
-        <a target="_blank" href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/">
-            deployment documentation</a>.</p>
+    <p>You can choose between different Kubernetes resource types from the dropdown menu next to the "Template" label.</p>
+    <p>Selecting a resource type from the dropdown will load a template for the selected type. This will replace your current content if it's not empty.</p>
+    <p>The manifest supports one Kubernetes resource per node. See official Kubernetes documentation for more details on each resource type.</p>
     <p>Multiple nodes can be connected to one <code>configure-device</code> node to set up a micro service
         architecture on the device. See the example, called <code>teknoir-device-configuration-example</code>,
         that can be imported from the menu.</p>
