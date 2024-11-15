@@ -1,0 +1,6 @@
+{
+  "watch": ["../src/**"],
+  "exec": "node $NODE_OPTIONS node_modules/node-red/red.js --userDir ./data",
+  "ext": "js, yaml, json, ts, proto, html",
+  "ignore": "src/**/*.test.ts, src/**/*.spec.ts"
+}

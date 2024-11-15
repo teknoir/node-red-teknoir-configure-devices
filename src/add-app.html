@@ -26,6 +26,19 @@
 
             function getTemplate(resourceType) {
                 var templates = {
+                    helmchart: `---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: teknoir-myapp
+  namespace: kube-system
+spec:
+  repo: https://teknoir.github.io/myapp-helm
+  chart: MyAppChart
+  targetNamespace: default
+  valuesContent: |-
+    myapp:
+      setting_one: value_one`,
                     deployment: `---
 apiVersion: apps/v1
 kind: Deployment
@@ -168,6 +181,7 @@ roleRef:
             });
 
             var resourceTypes = [
+                {value: 'helmchart', label: 'HelmChart'},
                 {value: 'deployment', label: 'Deployment'},
                 {value: 'configmap', label: 'ConfigMap'},
                 {value: 'service', label: 'Service'},
