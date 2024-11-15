@@ -1,19 +1,16 @@
 {
   "name": "node-red-teknoir-configure-devices",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "description": "A set of nodes to configure IoT devices on the Teknoir Platform",
   "private": true,
   "scripts": {
     "test": "jest",
-    "start": "yarn workspace debug start",
-    "debug": "NAMESPACE=demonstrations nodemon --watch src -e html,js,yaml --exec 'rm -vfr ./node_modules/node-red-teknoir-configure-devices/src/* && cp -Rv ./src/* ./node_modules/node-red-teknoir-configure-devices/src && yarn install && yarn workspace debug start-local'"
+    "start": "yarn workspace debug start-local",
+    "debug": "node_modules/.bin/nodemon --watch src -e html,js,yaml --exec 'rm -vfr ./node_modules/node-red-teknoir-configure-devices/src/* && cp -Rv ./src/* ./node_modules/node-red-teknoir-configure-devices/src && yarn install && yarn workspace debug start-local'"
   },
   "files": [
     "src",
     "test"
-  ],
-  "workspaces": [
-    "debug"
   ],
   "repository": {
     "type": "git",

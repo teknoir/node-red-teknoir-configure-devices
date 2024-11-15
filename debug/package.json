@@ -1,25 +1,25 @@
 {
-  "name": "debug",
-  "version": "3.0.2",
+  "name": "devstudio",
+  "version": "4.0.5",
   "description": "Low-code programming for event-driven applications",
   "homepage": "http://teknoir.ai",
   "repository": {
     "type": "git",
     "url": "https://github.com/teknoir/node-red-teknoir-visualize.git"
   },
-  "main": "node_modules/node-red/red.js",
   "scripts": {
-    "start-local": "NODE_OPTIONS=$NODE_OPTIONS node ../node_modules/node-red/red.js --userDir ./data",
-    "start": "node_modules/node-red-teknoir-configure-devices/node_modules/.bin/nodemon --watch '../' $NODE_OPTIONS node_modules/node-red-teknoir-configure-devices/node_modules/node-red/red.js --userDir ./data",
-    "start_": "node $NODE_OPTIONS node_modules/node-red/red.js --userDir ./data"
+    "start-local": "node ../node_modules/node-red/red.js --userDir ./data",
+    "nodemon": "nodemon",
+    "start": "nodemon --watch ../src ../node_modules/node-red/red.js --userDir ./data",
+    "start_": "node node_modules/node-red/red.js --userDir ./data"
   },
   "dependencies": {
-    "node-red": "^3.0.2",
+    "node-red": "4.0.5",
     "node-red-teknoir-configure-devices": "file:../",
-    "nodemon": "^2.0.19"
+    "nodemon": "^3.1.4"
   },
   "engines": {
-    "node": ">=10"
+    "node": ">=18"
   },
   "nodemonConfig": {
     "ext": "js,html"

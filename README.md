@@ -10,17 +10,10 @@ RUN npm install --no-audit --no-update-notifier --no-fund --save --save-prefix=~
 The nodes are properly documented in `Node-RED` itself.
 
 # Develop / debug
-Go to `./debug` and run:
+Make sure you use the correct K8s context.
+Example; run for the `demonstrations` namespace:
 ```
-npm install
-npm start
-```
-
-or in the root of the project
-
-```
-yarn install
-yarn run deubg
+./debug.sh demonstrations
 ```
 
 # TODO:
