@@ -1,0 +1,47 @@
+<script type="text/javascript">
+    RED.nodes.registerType('add-helm-gitops',{
+        category: 'devices',
+        color: '#a6bbcf',
+        defaults: {
+            name: {value:""},
+            url: {value:"", required:true},
+            branch: {value:"main", required:true},
+            path: {value:"", required:true}
+        },
+        inputs:0,
+        outputs:1,
+        icon: "tn_dark.svg",
+        label: function() {
+            return this.name||"add-helm-gitops";
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="add-helm-gitops">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-url"><i class="fa fa-github"></i> Repo URL</label>
+        <input type="text" id="node-input-url" placeholder="https://github.com/org/repo">
+    </div>
+    <div class="form-row">
+        <label for="node-input-branch"><i class="fa fa-code-fork"></i> Branch</label>
+        <input type="text" id="node-input-branch" placeholder="main">
+    </div>
+    <div class="form-row">
+        <label for="node-input-path"><i class="fa fa-file"></i> Path</label>
+        <input type="text" id="node-input-path" placeholder="path/to/manifest.yaml">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="add-helm-gitops">
+    <p>A node that fetches a <code>HelmChart</code> resource manifest from a GitHub repository.</p>
+    <p>Provide the GitHub Repository URL, Branch (defaulting to <code>main</code>), and the full path to the YAML file in the repository.</p>
+    <p>The node will fetch the file from GitHub when the flow is deployed or triggered, and pass it to the connected <code>configure-device</code> node.</p>
+    <p>Only <code>HelmChart</code> is the supported resource type for this node.</p>
+</script>

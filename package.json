@@ -26,6 +26,7 @@
   "node-red": {
     "nodes": {
       "teknoir-add-app": "src/add-app.js",
+      "teknoir-add-helm-gitops": "src/add-helm-gitops.js",
       "teknoir-configure-device": "src/configure-device.js"
     }
   },
