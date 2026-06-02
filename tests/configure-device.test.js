@@ -23,15 +23,15 @@ describe('configureDevice', () => {
   }
 
   beforeEach(async () => {
-    node = { client: new Client({ version: '1.13' }), error: jest.fn(), status: jest.fn() };
-    let crd = yaml.safeLoad(fs.readFileSync(require.resolve('../src/kubeflow.org_devices.yaml'), {
+    node = { client: new Client({ version: '1.13' }), error: jest.fn(), status: jest.fn(), trace: jest.fn() };
+    let crd = yaml.safeLoad(fs.readFileSync(require.resolve('../src/teknoir.org_devices.yaml'), {
       encoding: 'utf8',
       flag: 'r'
     }));
     node.client.addCustomResourceDefinition(crd);
     device = {
       kind: 'Device',
-      apiVersion: 'kubeflow.org/v1',
+      apiVersion: 'teknoir.org/v1',
       metadata: {
         name: 'test-device',
         labels: {
@@ -42,9 +42,7 @@ describe('configureDevice', () => {
       spec: {
         keys: {},
         manifest: {
-          apps: {
-            items: []
-          }
+          apps: {}
         }
       }
     };
@@ -52,12 +50,13 @@ describe('configureDevice', () => {
     config = [{ kind: "Deployment", metadata: { name: "record-measurements" }, spec: { template: { spec: { containers: [{}] } } } }];
     putMock = jest.fn().mockResolvedValue({ body: { status: 'Success' } });
 
-    node.client.apis['kubeflow.org'].v1.namespaces = jest.fn().mockReturnValue({
+    const namespacesMock = jest.fn().mockReturnValue({
       devices: jest.fn().mockReturnValue({
         post: jest.fn(),
         put: putMock
       })
     });
+    node.client.apis['teknoir.org'] = { v1: { namespaces: namespacesMock } };
   });
 
   it('should successfully configure device', async () => {
@@ -78,7 +77,22 @@ describe('configureDevice', () => {
     expect(putMock).toHaveBeenCalledTimes(1);
   });
 
+  it('should handle unsupported API version', async () => {
+    device.apiVersion = 'unsupported.org/v1';
+
+    configureDeviceWrapper(node, device, namespace, config);
+
+    // error/status should have been called
+    expect(node.error).toHaveBeenCalledTimes(1);
+    expect(node.status).toHaveBeenCalledWith(expect.objectContaining({
+        text: "Unsupported API version"
+    }));
+    // putMock should NOT have been called because it returns early
+    expect(putMock).toHaveBeenCalledTimes(0);
+  });
+
   it('should handle error when configuring device due to incorrect manifest', async () => {
+    device.apiVersion = 'teknoir.org/v1';
     config.push({ kind: "ConfigMap", metadata: { name: "sensors-config" }})
     config.push({ kind: "Deployment", metadata: { name: "record-video" }})
 
@@ -86,7 +100,9 @@ describe('configureDevice', () => {
 
     // error/status should have been called
     expect(node.error).toHaveBeenCalledTimes(1);
-    expect(node.status).toHaveBeenCalledTimes(1);
+    expect(node.status).toHaveBeenCalledWith(expect.objectContaining({
+        text: "Malformed configuration"
+    }));
     expect(putMock).toHaveBeenCalledTimes(1);
   });
 });

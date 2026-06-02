@@ -27,7 +27,7 @@ module.exports = async function (RED) {
         const app = config.app;
         const node = this;
         this.client = new Client({version: '1.13'});
-        readYaml('./kubeflow.org_devices.yaml', (err, crd) => {
+        readYaml('./teknoir.org_devices.yaml', (err, crd) => {
             if (err) {
                 console.log(err);
             } else {
@@ -63,7 +63,7 @@ module.exports = async function (RED) {
                                 text: "Command sent to " + app + " on: \n" + node.devices.map(deviceName => deviceName + " \n")
                             });
                         } else if (mode === "labels") {
-                            this.client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get().then(devices => {
+                            this.client.apis['teknoir.org'].v1.namespaces(namespace).devices().get().then(devices => {
                                 var filtered = devices.body.items.filter(device => {
                                     return node.metadatalabels.reduce((matchingAllLabels, label1) => {
                                         return matchingAllLabels && Object.keys(label1).reduce((matchingAll, key1) => {
@@ -98,12 +98,13 @@ module.exports = async function (RED) {
     RED.nodes.registerType("device-command", DeviceCommand);
 
     DeviceCommand.prototype.close = function () {
+        const node = this;
         try {
             var context = RED.util.parseContextStore(this.id);
             var target = this.context()["global"];
             target.set(context.key, [], context.store, function (err) {
                 if (err) {
-                    this.error(err);
+                    node.error(err);
                 }
             });
         } catch (err) {

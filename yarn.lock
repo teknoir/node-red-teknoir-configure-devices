@@ -3882,7 +3882,7 @@ node-red-admin@^4.0.1:
     "@node-rs/bcrypt" "1.10.4"
 
 "node-red-teknoir-configure-devices@file:../":
-  version "0.1.7"
+  version "0.1.9"
   resolved "file:"
   dependencies:
     depd "2.0.0"

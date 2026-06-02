@@ -29,9 +29,6 @@ module.exports = function (RED) {
         if (apiVersion === 'teknoir.org') {
             // Handle teknoir.org devices
             processTeknoirDevice(node, device, namespace, newItems);
-        } else if (apiVersion === 'kubeflow.org') {
-            // Handle kubeflow.org devices
-            processKubeflowDevice(node, device, namespace, newItems);
         } else {
             node.error("Unsupported API version: " + apiVersion);
             node.status({
@@ -67,8 +64,39 @@ module.exports = function (RED) {
 
         newItems.forEach(newItem => {
             if (newItem && newItem.metadata) {
-                const namespace = newItem.metadata.namespace || 'default';
-                let appName = `${newItem.metadata.name}-${newItem.kind.toLowerCase()}-${namespace}`;
+                if (newItem.kind === 'Deployment') {
+                    try {
+                        newItem.spec.template.spec.containers.forEach(container => {
+                            if (!container.hasOwnProperty('env')) {
+                                container['env'] = [];
+                            }
+                            container.env.push({
+                                name: 'LABEL_DEVICE_ID',
+                                value: device.metadata.name
+                            });
+                            container.env.push({
+                                name: 'LABEL_NAMESPACE',
+                                value: namespace
+                            });
+                            Object.keys(device.metadata.labels).forEach(key => {
+                                container.env.push({
+                                    name: 'LABEL_' + key.toLocaleUpperCase(),
+                                    value: device.metadata.labels[key]
+                                });
+                            });
+                        });
+                    } catch (err) {
+                        node.error("Malformed configuration: " + err.message);
+                        node.status({
+                            fill: "red",
+                            shape: "dot",
+                            text: "Malformed configuration"
+                        });
+                    }
+                }
+
+                const appNamespace = newItem.metadata.namespace || 'default';
+                let appName = `${newItem.metadata.name}-${newItem.kind.toLowerCase()}-${appNamespace}`;
                 appName = truncateName(appName, MAX_K8S_NAME_LENGTH);
                 node.trace('Processing app: ' + appName);
 
@@ -91,63 +119,6 @@ module.exports = function (RED) {
 
     }
 
-    function processKubeflowDevice(node, device, namespace, newItems) {
-
-        newItems.filter(manifest => manifest.hasOwnProperty('kind') && manifest.kind === 'Deployment').map(manifest => {
-            try {
-
-                if (!manifest.metadata.hasOwnProperty('annotations')) {
-                    manifest.metadata['annotations'] = {};
-                }
-
-                manifest.metadata.annotations['teknoir.org/managed-by'] = 'devstudio';
-
-                manifest.spec.template.spec.containers.forEach(container => {
-                    if (!container.hasOwnProperty('env')) {
-                        container['env'] = [];
-                    }
-                    container.env.push({
-                        name: 'LABEL_DEVICE_ID',
-                        value: device.metadata.name
-                    });
-                    container.env.push({
-                        name: 'LABEL_NAMESPACE',
-                        value: namespace
-                    });
-                    Object.keys(device.metadata.labels).forEach(key => {
-                        container.env.push({
-                            name: 'LABEL_' + key.toLocaleUpperCase(),
-                            value: device.metadata.labels[key]
-                        });
-                    });
-                });
-            } catch (err) {
-                node.error("Malformed configuration: " + err.message);
-                node.status({
-                    fill: "red",
-                    shape: "dot",
-                    text: "Malformed configuration"
-                });
-            }
-        });
-
-
-        if (!device.spec.manifest.hasOwnProperty('apps')) {
-            device.spec.manifest['apps'] = { items: [] };
-        }
-
-        device.spec.manifest.apps.items = device.spec.manifest.apps.items.filter(item => {
-            return item.metadata.annotations && (
-                !item.metadata.annotations.hasOwnProperty('teknoir.org/managed-by') ||
-                item.metadata.annotations['teknoir.org/managed-by'] !== 'devstudio');
-        });
-
-        device.spec.manifest.apps.items = device.spec.manifest.apps.items.filter(item => {
-            return !newItems.some(newItem => newItem.metadata.name === item.metadata.name)
-        });
-
-        device.spec.manifest.apps.items.push(...newItems);
-    }
 
     function sendDebug(node, msg, debuglength) {
         const debug = RED.util.encodeObject({
@@ -176,7 +147,6 @@ module.exports = function (RED) {
 
         // List of CRD files to load
         const crdFiles = [
-            './kubeflow.org_devices.yaml',
             './teknoir.org_devices.yaml'
         ];
 
@@ -262,9 +232,7 @@ module.exports = function (RED) {
                                         // I think this is single threaded, so we can just add a delay here... times 2 as this is not the only client
 
                                         let apiVersion = null;
-                                        if (device.source === 'kubeflow.org') {
-                                            apiVersion = 'kubeflow.org';
-                                        } else if (device.source === 'teknoir.org') {
+                                        if (device.source === 'teknoir.org') {
                                             apiVersion = 'teknoir.org';
                                         }
 
@@ -314,7 +282,7 @@ module.exports = function (RED) {
                                         return Object.keys(label).map(key => key + "=" + label[key]);
                                     }).join(",");
 
-                                    const apiVersions = ['kubeflow.org', 'teknoir.org'];
+                                    const apiVersions = ['teknoir.org'];
 
                                     apiVersions.forEach(apiVersion => {
                                         node.client.apis[apiVersion].v1.namespaces(namespace).devices().get({
@@ -379,12 +347,13 @@ module.exports = function (RED) {
             clearTimeout(this.onceTimeout);
         }
 
+        const node = this;
         try {
             var context = RED.util.parseContextStore(this.id);
             var target = this.context()["global"];
             target.set(context.key, [], context.store, function (err) {
                 if (err) {
-                    this.error(err);
+                    node.error(err);
                 }
             });
         } catch (err) {
@@ -398,33 +367,13 @@ module.exports = function (RED) {
         try {
             let client = new Client({ version: '1.13' });
 
-            let kubeflowDeviceList = [];
             let teknoirDeviceList = [];
 
-            let kubeflowData = fs.readFileSync(require.resolve('./kubeflow.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
-            let kubeflowCrd = yaml.load(kubeflowData);
-            client.addCustomResourceDefinition(kubeflowCrd);
-
             let teknoirData = fs.readFileSync(require.resolve('./teknoir.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
-            let teknoirCrd = yaml.load(teknoirData);
+            let teknoirCrd = yaml.safeLoad(teknoirData);
             client.addCustomResourceDefinition(teknoirCrd);
-            try {
-                let kubeflowDevices = await client.apis['kubeflow.org'].v1.namespaces(namespace).devices().get();
-                kubeflowDeviceList = kubeflowDevices.body.items.map(device => ({
-                    name: device.metadata.name,
-                    namespace: device.metadata.namespace,
-                    labels: device.metadata.labels,
-                    source: 'kubeflow.org'
-                }));
-            } catch (error) {
-                console.error("Failed to load or fetch kubeflow.org devices:", error.message);
-            }
 
             try {
-                let teknoirData = fs.readFileSync(require.resolve('./teknoir.org_devices.yaml'), { encoding: 'utf8', flag: 'r' });
-                let teknoirCrd = yaml.load(teknoirData);
-                client.addCustomResourceDefinition(teknoirCrd);
-
                 let teknoirDevices = await client.apis['teknoir.org'].v1.namespaces(namespace).devices().get();
                 teknoirDeviceList = teknoirDevices.body.items.map(device => ({
                     name: device.metadata.name,
@@ -437,7 +386,7 @@ module.exports = function (RED) {
             }
 
             // Combine both device lists
-            let combinedDeviceList = [...kubeflowDeviceList, ...teknoirDeviceList];
+            let combinedDeviceList = [...teknoirDeviceList];
 
             // Send the combined list as the response
             res.status(200).json(combinedDeviceList);
