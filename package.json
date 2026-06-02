@@ -27,7 +27,8 @@
     "nodes": {
       "teknoir-add-app": "src/add-app.js",
       "teknoir-add-helm-gitops": "src/add-helm-gitops.js",
-      "teknoir-configure-device": "src/configure-device.js"
+      "teknoir-configure-device": "src/configure-device.js",
+      "teknoir-github-config": "src/github-config.js"
     }
   },
   "author": "Anders Åslund <anders.aslund@teknoir.ai>",

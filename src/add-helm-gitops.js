@@ -6,6 +6,7 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, config);
         var node = this;
         this.url = config.url;
+        this.githubConfig = RED.nodes.getNode(config.githubConfig);
         this.branch = config.branch || "main";
         this.path = config.path;
         this.onceDelay = 0.01 * 1000;
@@ -52,7 +53,20 @@ module.exports = function (RED) {
             const url = `https://raw.githubusercontent.com/${org}/${repo}/${branch}/${path}`;
             node.status({ fill: "blue", shape: "dot", text: "fetching..." });
 
-            https.get(url, (res) => {
+            const options = {
+                headers: {
+                    'User-Agent': 'Node-RED'
+                }
+            };
+
+            if (node.githubConfig && node.githubConfig.credentials) {
+                const creds = node.githubConfig.credentials;
+                if (creds.token) {
+                    options.headers['Authorization'] = `token ${creds.token}`;
+                }
+            }
+
+            https.get(url, options, (res) => {
                 if (res.statusCode !== 200) {
                     const err = new Error(`Failed to fetch: ${res.statusCode} ${res.statusMessage}`);
                     node.error(err.message, msg);

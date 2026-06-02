@@ -5,6 +5,7 @@
         defaults: {
             name: {value:""},
             url: {value:"", required:true},
+            githubConfig: {type:"github-config", required: false},
             branch: {value:"main", required:true},
             path: {value:"", required:true}
         },
@@ -28,6 +29,10 @@
     <div class="form-row">
         <label for="node-input-url"><i class="fa fa-github"></i> Repo URL</label>
         <input type="text" id="node-input-url" placeholder="https://github.com/org/repo">
+    </div>
+    <div class="form-row">
+        <label for="node-input-githubConfig"><i class="fa fa-cog"></i> Credentials</label>
+        <input type="text" id="node-input-githubConfig">
     </div>
     <div class="form-row">
         <label for="node-input-branch"><i class="fa fa-code-fork"></i> Branch</label>

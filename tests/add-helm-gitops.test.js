@@ -22,7 +22,8 @@ describe('AddHelmGitOps Node', () => {
                 createNode: jest.fn((instance, cfg) => {
                     Object.assign(instance, node, cfg);
                 }),
-                registerType: jest.fn()
+                registerType: jest.fn(),
+                getNode: jest.fn()
             },
             util: {
                 setMessageProperty: jest.fn((msg, prop, val) => {
@@ -56,7 +57,10 @@ describe('AddHelmGitOps Node', () => {
             resume: jest.fn()
         };
 
-        https.get.mockImplementation((url, cb) => {
+        https.get.mockImplementation((url, options, cb) => {
+            if (typeof options === 'function') {
+                cb = options;
+            }
             cb(mockResponse);
             return { on: jest.fn() };
         });
@@ -71,6 +75,7 @@ describe('AddHelmGitOps Node', () => {
             try {
                 expect(https.get).toHaveBeenCalledWith(
                     'https://raw.githubusercontent.com/test-org/test-repo/main/manifest.yaml',
+                    expect.any(Object),
                     expect.any(Function)
                 );
                 expect(msg.add_resource).toBe(true);
@@ -99,7 +104,10 @@ describe('AddHelmGitOps Node', () => {
             resume: jest.fn()
         };
 
-        https.get.mockImplementation((url, cb) => {
+        https.get.mockImplementation((url, options, cb) => {
+            if (typeof options === 'function') {
+                cb = options;
+            }
             cb(mockResponse);
             return { on: jest.fn() };
         });
@@ -130,7 +138,10 @@ describe('AddHelmGitOps Node', () => {
             resume: jest.fn()
         };
 
-        https.get.mockImplementation((url, cb) => {
+        https.get.mockImplementation((url, options, cb) => {
+            if (typeof options === 'function') {
+                cb = options;
+            }
             cb(mockResponse);
             return { on: jest.fn() };
         });
@@ -164,7 +175,10 @@ describe('AddHelmGitOps Node', () => {
             resume: jest.fn()
         };
 
-        https.get.mockImplementation((url, cb) => {
+        https.get.mockImplementation((url, options, cb) => {
+            if (typeof options === 'function') {
+                cb = options;
+            }
             cb(mockResponse);
             return { on: jest.fn() };
         });
@@ -176,6 +190,7 @@ describe('AddHelmGitOps Node', () => {
             try {
                 expect(https.get).toHaveBeenCalledWith(
                     'https://raw.githubusercontent.com/test-org/test-repo/main/manifest.yaml',
+                    expect.any(Object),
                     expect.any(Function)
                 );
                 done();
@@ -200,7 +215,10 @@ describe('AddHelmGitOps Node', () => {
             resume: jest.fn()
         };
 
-        https.get.mockImplementation((url, cb) => {
+        https.get.mockImplementation((url, options, cb) => {
+            if (typeof options === 'function') {
+                cb = options;
+            }
             cb(mockResponse);
             return { on: jest.fn() };
         });
@@ -212,6 +230,7 @@ describe('AddHelmGitOps Node', () => {
             try {
                 expect(https.get).toHaveBeenCalledWith(
                     'https://raw.githubusercontent.com/test-org/test-repo/main/manifest.yaml',
+                    expect.any(Object),
                     expect.any(Function)
                 );
                 done();
@@ -220,6 +239,52 @@ describe('AddHelmGitOps Node', () => {
             }
         });
     });
+
+    it('should use token authentication if provided', (done) => {
+        AddHelmGitOpsModule(RED);
+        const NodeConstructor = RED.nodes.registerType.mock.calls[0][1];
+        config.githubConfig = 'config-id';
+        
+        const mockCredentials = { token: 'test-token' };
+        RED.nodes.getNode.mockReturnValue({ credentials: mockCredentials });
+
+        const instance = new NodeConstructor(config);
+
+        const mockResponse = {
+            statusCode: 200,
+            on: jest.fn((event, cb) => {
+                if (event === 'data') cb('apiVersion: helm.cattle.io/v1\nkind: HelmChart\nmetadata:\n  name: test');
+                if (event === 'end') cb();
+            }),
+            resume: jest.fn()
+        };
+
+        https.get.mockImplementation((url, options, cb) => {
+            cb(mockResponse);
+            return { on: jest.fn() };
+        });
+
+        const inputCallback = node.on.mock.calls.find(call => call[0] === 'input')[1];
+        inputCallback({});
+
+        setImmediate(() => {
+            try {
+                expect(https.get).toHaveBeenCalledWith(
+                    expect.any(String),
+                    expect.objectContaining({
+                        headers: expect.objectContaining({
+                            'Authorization': 'token test-token'
+                        })
+                    }),
+                    expect.any(Function)
+                );
+                done();
+            } catch (error) {
+                done(error);
+            }
+        });
+    });
+
 
     it('should handle network error', (done) => {
         AddHelmGitOpsModule(RED);
